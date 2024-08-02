@@ -89,7 +89,7 @@ def deposit(request):
         new_initial_amount = current_amount + deposit_amount
         user_inst.initial_amount = new_initial_amount
 
-        transaction = UserTransaction.objects.create(user_id=user_inst, deposit_amount=deposit_amount, withdraw=0)
+        transaction = UserTransaction.objects.create(user_id=user_inst, deposit_amount=deposit_amount, withdraw=0,transaction_type="Deposit")
         transaction.save()
         user_inst.save()
 
@@ -128,6 +128,23 @@ def withdraw(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@token_required
+def check_balance(request):
+        try:
+            user_id = request.user_id
+            user_inst = CustomUser.objects.get(id=user_id)
+            balance = user_inst.initial_amount
+            transaction = UserTransaction.objects.create(user_id=user_inst, deposit_amount=0, withdraw=0,
+                                                     transaction_type="Balance check", check_balance=balance)
+            user_inst.save()
+            transaction.save()
+
+            return Response({"balance": balance}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error>>': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
