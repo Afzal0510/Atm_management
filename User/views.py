@@ -102,10 +102,11 @@ def deposit(request):
 
 
 @api_view(['POST'])
+@token_required
 def withdraw(request):
     try:
         user_id = request.user_id
-        withdraw = request.data.get('withdraw')
+        withdraw= request.data.get('withdraw')
 
         try:
            if float(withdraw) <= 0:
@@ -114,10 +115,10 @@ def withdraw(request):
            return Response({"error": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
         user_inst = CustomUser.objects.get(id=user_id)
         current_amount = user_inst.initial_amount
-        new_initial_amount = current_amount + withdraw
+        new_initial_amount = current_amount - withdraw
         user_inst.initial_amount = new_initial_amount
 
-        transaction = UserTransaction.objects.create(user_id=user_inst,deposit_amount=0,withdraw=withdraw)
+        transaction = UserTransaction.objects.create(user_id=user_inst, deposit_amount=0, withdraw=withdraw, transaction_type="Withdraw")
         transaction.save()
         user_inst.save()
 
