@@ -1,20 +1,21 @@
-import jwt
-from django.db.migrations import serializer
-from rest_framework.authtoken.models import Token
-
-
 from .models import CustomUser, UserTransaction
 from rest_framework.decorators import api_view
-from .serializers import UserSerializer
+from .serializers import UserSerializer, UserTransactionSerializer
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Q
 from rest_framework.views import APIView
-from .utils import generate_access_token, generate_refresh_token, decode_token, SECRET_KEY, token_required
+from .utils import generate_access_token, decode_token, SECRET_KEY, token_required
 
 
 @api_view(['POST'])
 def register_user(request):
+
+    """
+      Registers a new user. Expects username, email, and password in the request data.
+      If valid, creates and returns the user data.
+      """
+    # Initialize serializer with request data
     serializer = UserSerializer(data=request.data)
     if serializer.is_valid():
         serializer.save()
@@ -24,6 +25,12 @@ def register_user(request):
 
 @api_view(['POST'])
 def user_login(request):
+
+    """
+      Logs in a user using either username or email and password.
+      If successful, generates and returns an access token.
+      """
+
     username_or_email = request.data.get('username')
     password = request.data.get('password')
 
@@ -40,41 +47,50 @@ def user_login(request):
         return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
     # Check the password if the user is found
-    if not(user.check_password(password)):
+    if not (user.check_password(password)):
         return Response({'error': 'Incorrect Password'}, status=status.HTTP_400_BAD_REQUEST)
     if user:
+        # Generate an access token for the user
         access_token = generate_access_token(user)
-        # token, _ = Token.objects.get_or_create(user=user)
+        user.is_login = True  # Set user as logged in
+        user.is_active = True # Ensure user is active
         user.token = str(access_token)
         user.save()
-        # user_data = {
-        #     'username': user.username,
-        #     'amount': user.amount,
-        #
-        # }
         user_data = UserSerializer(user).data
-        return Response({'token': access_token, 'data': user_data}, status=status.HTTP_200_OK)
+        return Response({'data': {'token': access_token, **user_data, }}, status=status.HTTP_200_OK)
 
     return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 @api_view(['POST'])
+@token_required  # Decorator to ensure the user is authenticated
 def user_logout(request):
-    token_key = request.data.get('token')
-    if not token_key:
-        return Response({'error': 'Token is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    """
+       Logs out the user by invalidating the access token.
+       """
 
     try:
-        Token.objects.filter(key=token_key).delete()
-        Token.objects.all()
+        user_id = request.user_id
+        user_inst = CustomUser.objects.get(id=user_id)  # Find the user instance
+        user_inst.token = None
+        user_inst.save()
         return Response({'message': 'Logged out successfully'}, status=status.HTTP_200_OK)
-    except Token.DoesNotExist:
-        return (Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST))
+    except CustomUser.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
 @token_required
 def deposit(request):
+
+    """
+       Allows the user to deposit an amount into their account.
+       Validates the deposit amount and updates the balance.
+       """
+
     try:
         user_id = request.user_id
         deposit_amount = request.data.get('deposit_amount')
@@ -85,11 +101,13 @@ def deposit(request):
         except (ValueError, TypeError):
             return Response({"error": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
         user_inst = CustomUser.objects.get(id=user_id)
-        current_amount = user_inst.initial_amount
-        new_initial_amount = current_amount + deposit_amount
-        user_inst.initial_amount = new_initial_amount
+        current_amount = user_inst.open_balance
+        new_open_balance = current_amount + deposit_amount
+        user_inst.open_balance = new_open_balance
 
-        transaction = UserTransaction.objects.create(user_id=user_inst, deposit_amount=deposit_amount, withdraw=0,transaction_type="Deposit")
+        # Create a transaction record for the deposit
+        transaction = UserTransaction.objects.create(user_id=user_inst, deposit_amount=deposit_amount,
+                                                      withdraw=0, transaction_type="Deposit")
         transaction.save()
         user_inst.save()
 
@@ -104,21 +122,29 @@ def deposit(request):
 @api_view(['POST'])
 @token_required
 def withdraw(request):
+
+    """
+        Allows the user to withdraw an amount from their account.
+        Validates the withdrawal amount and updates the balance.
+        """
+
     try:
         user_id = request.user_id
-        withdraw= request.data.get('withdraw')
+        withdraw = request.data.get('withdraw')
 
         try:
-           if float(withdraw) <= 0:
-               return Response({"error": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
+            if float(withdraw) <= 0:
+                return Response({"error": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
         except (ValueError, TypeError):
-           return Response({"error": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
         user_inst = CustomUser.objects.get(id=user_id)
-        current_amount = user_inst.initial_amount
-        new_initial_amount = current_amount - withdraw
-        user_inst.initial_amount = new_initial_amount
+        current_amount = user_inst.open_balance
+        new_open_balance = current_amount - withdraw
+        user_inst.open_balance = new_open_balance
 
-        transaction = UserTransaction.objects.create(user_id=user_inst, deposit_amount=0, withdraw=withdraw, transaction_type="Withdraw")
+        # Create a transaction record for the withdrawal
+        transaction = UserTransaction.objects.create(user_id=user_inst, deposit_amount=0,
+                                                     withdraw=withdraw, transaction_type="Withdraw")
         transaction.save()
         user_inst.save()
 
@@ -129,31 +155,67 @@ def withdraw(request):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 @api_view(['POST'])
 @token_required
 def check_balance(request):
-        try:
-            user_id = request.user_id
-            user_inst = CustomUser.objects.get(id=user_id)
-            balance = user_inst.initial_amount
-            transaction = UserTransaction.objects.create(user_id=user_inst, deposit_amount=0, withdraw=0,
-                                                     transaction_type="Balance check", check_balance=balance)
-            user_inst.save()
-            transaction.save()
 
-            return Response({"balance": balance}, status=status.HTTP_200_OK)
+    """
+     Returns the current balance of the user.
+     """
 
-        except Exception as e:
-            return Response({'error>>': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    try:
+        user_id = request.user_id
+        user_inst = CustomUser.objects.get(id=user_id)
+        balance = user_inst.open_balance  # Get current balance
+
+        return Response({"balance": balance}, status=status.HTTP_200_OK)
+
+    except CustomUser.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['GET'])
+@token_required
+def transaction_history(request):
+
+    """
+      Returns the transaction history for the user along with the final balance.
+      """
+
+    try:
+        user_id = request.user_id
+        user = CustomUser.objects.get(id=user_id)
+        # Get all transactions for the user
+        transactions = UserTransaction.objects.filter(user_id=user_id)
+        transaction_data = UserTransactionSerializer(transactions, many=True).data
+
+        initial_amount = user.initial_amount
+        # Calculate total deposits
+        total_deposits = sum(transaction.deposit_amount for transaction in transactions)
+        # Calculate total withdrawals
+        total_withdrawals = sum(transaction.withdraw for transaction in transactions)
+
+        # Calculate the final balance
+        final_balance = total_deposits - total_withdrawals
+
+        return Response({"transaction": transaction_data, "final_balance": final_balance,
+                         "initial_amount": initial_amount}, status=status.HTTP_200_OK)
+
+    except CustomUser.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# Define a view to handle token refresh
 class RefreshTokenView(APIView):
     def post(self, request, utl=None):
-        refresh_token = request.data.get('refresh')
+        refresh_token = request.data.get('refresh')  # Get refresh token from request data
 
-        payload = utl.decode_token(refresh_token)
+        payload = utl.decode_token(refresh_token)   # Decode the token to get payload
         if not payload:
             return Response({'error': 'Invalid or expired refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
 
