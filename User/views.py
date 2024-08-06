@@ -210,20 +210,3 @@ def transaction_history(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# Define a view to handle token refresh
-class RefreshTokenView(APIView):
-    def post(self, request, utl=None):
-        refresh_token = request.data.get('refresh')  # Get refresh token from request data
-
-        payload = utl.decode_token(refresh_token)   # Decode the token to get payload
-        if not payload:
-            return Response({'error': 'Invalid or expired refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        try:
-            user = CustomUser.objects.get(id=payload['user_id'])
-        except CustomUser.DoesNotExist:
-            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        new_access_token = utl.generate_access_token(user)
-
-        return Response({'access': new_access_token})
