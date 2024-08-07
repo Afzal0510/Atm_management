@@ -11,7 +11,7 @@ from rest_framework import status
 SECRET_KEY = settings.SECRET_KEY
 
 # Token expiration time
-ACCESS_TOKEN_LIFETIME = timedelta(minutes=10)
+ACCESS_TOKEN_LIFETIME = timedelta(minutes=30)
 REFRESH_TOKEN_LIFETIME = timedelta(days=1)
 
 

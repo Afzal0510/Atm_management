@@ -12,7 +12,4 @@ urlpatterns = [
     path('balance/', check_balance, name='balance'),
     path('history/', transaction_history, name='history'),
 
-
-
-
 ]

@@ -1,3 +1,5 @@
+from rest_framework.exceptions import ValidationError
+
 from .models import CustomUser, UserTransaction
 from rest_framework.decorators import api_view
 from .serializers import UserSerializer, UserTransactionSerializer
@@ -188,15 +190,25 @@ def transaction_history(request):
     try:
         user_id = request.user_id
         user = CustomUser.objects.get(id=user_id)
+
+        # Get the transaction_type from the request query parameters, if provided
+        transaction_type = request.query_params.get('transaction_type')
+        # Check if the 'transaction_type' is either 'deposit' or 'withdraw'.
+
+        if transaction_type in ['deposit', 'withdraw']:
+            transactions = UserTransaction.objects.filter(user_id=user_id, transaction_type=transaction_type)
+        else:
+            transactions = UserTransaction.objects.filter(user_id=user_id)
+
         # Get all transactions for the user
-        transactions = UserTransaction.objects.filter(user_id=user_id)
+
         transaction_data = UserTransactionSerializer(transactions, many=True).data
 
         initial_amount = user.initial_amount
         # Calculate total deposits
-        total_deposits = sum(transaction.deposit_amount for transaction in transactions)
+        total_deposits = sum(transaction.deposit_amount for transaction in transactions )
         # Calculate total withdrawals
-        total_withdrawals = sum(transaction.withdraw for transaction in transactions)
+        total_withdrawals = sum(transaction.withdraw for transaction in transactions )
 
         # Calculate the final balance
         final_balance = total_deposits - total_withdrawals
