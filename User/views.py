@@ -213,8 +213,8 @@ def transaction_history(request):
         # Calculate the final balance
         final_balance = total_deposits - total_withdrawals
 
-        return Response({"transaction": transaction_data, "final_balance": final_balance,
-                         "initial_amount": initial_amount}, status=status.HTTP_200_OK)
+        return Response({'username': user.username,"transaction": transaction_data, "final_balance": final_balance,
+                         "initial_amount": initial_amount},status=status.HTTP_200_OK)
 
     except CustomUser.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
