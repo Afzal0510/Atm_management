@@ -1,5 +1,3 @@
-
-
 from rest_framework import serializers
 from .models import CustomUser, UserTransaction
 
@@ -26,6 +24,10 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserTransactionSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user_id.username")
+
     class Meta:
         model = UserTransaction
-        fields = ['user_id', 'deposit_amount', 'withdraw', 'transaction_type']
+        fields = ['user_id', 'deposit_amount', 'withdraw', 'transaction_type', 'username']
+
+

@@ -11,7 +11,7 @@ from rest_framework import status
 SECRET_KEY = settings.SECRET_KEY
 
 # Token expiration time
-ACCESS_TOKEN_LIFETIME = timedelta(minutes=30)
+ACCESS_TOKEN_LIFETIME = timedelta(minutes=2)
 REFRESH_TOKEN_LIFETIME = timedelta(days=1)
 
 
@@ -68,5 +68,6 @@ def token_required(fun):
             return JsonResponse({"message": "Token is expired"}, status=status.HTTP_498_INVALID_TOKEN)
         except jwt.InvalidTokenError:
             return JsonResponse({"message": "Invalid token"}, status=status.HTTP_403_FORBIDDEN)
+
 
     return wrap

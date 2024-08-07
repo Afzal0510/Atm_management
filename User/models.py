@@ -15,3 +15,4 @@ class UserTransaction(models.Model):
     deposit_amount = models.FloatField(max_length=20)
     withdraw = models.FloatField(max_length=20)
     transaction_type = models.CharField(default="Blank", max_length=50)
+
